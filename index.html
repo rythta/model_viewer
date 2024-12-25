@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Node/Color Image Viewer</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+
+  <style>
+    /* Page background */
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: #3b3b3b;
+      color: #ffffff;
+      font-family: Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      min-height: 100vh;
+    }
+
+    header {
+      margin: 1rem 0;
+      text-align: center;
+    }
+
+    .controls {
+      display: flex;
+      flex-direction: row;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    select, label {
+      font-size: 1rem;
+      color: #000;
+    }
+
+    /* Force white text for the label, but the <select> background 
+       can stay white or we can style it if needed. */
+    label {
+      color: #fff;
+      font-weight: bold;
+    }
+
+    /* Center the image, make it responsive */
+    img {
+      max-width: 90%;
+      height: auto;
+      border: 2px solid #ccc;
+      border-radius: 8px;
+    }
+  </style>
+</head>
+<body>
+  <!-- <header> -->
+  <!--   <h1>Node/Color Image Viewer</h1> -->
+  <!-- </header> -->
+  
+  <div class="controls">
+    <div>
+      <label for="nodesSelect">Number of Nodes:</label><br/>
+      <select id="nodesSelect"></select>
+    </div>
+    <div>
+      <label for="colorSelect">Color:</label><br/>
+      <select id="colorSelect">
+        <option value="white">White</option>
+        <option value="black">Black</option>
+        <option value="red">Red</option>
+        <option value="blue">Blue</option>
+      </select>
+    </div>
+  </div>
+
+  <img id="displayImage" src="" alt="Selected Node/Color" />
+
+  <script>
+    // -------------------------------------------------------
+    // Configuration / Data
+    // -------------------------------------------------------
+    // Colors in the order they repeat starting at NN=4
+    // (NN-4) % 4 => 0 => white, 1 => black, 2 => red, 3 => blue
+    const colorArray = ["white","black","red","blue"];
+
+    // The min and max valid NN from the problem statement
+    const MIN_NN = 4;
+    const MAX_NN = 99;
+
+    // The formula for how many nodes an image with index NN has:
+    // numberOfNodes = floor( (NN+4)/4 )
+    // => For a given numberOfNodes n, valid NN are [4n - 4, 4n - 3, 4n - 2, 4n - 1].
+    // We pick the one among those that matches the requested color.
+
+    // Number of nodes can range from:
+    //  n = floor((4 + 4)/4) = 2  (when NN=4) 
+    // up to 
+    //  n = floor((99 + 4)/4) = floor(103/4) = 25
+    const MIN_NODES = 2;
+    const MAX_NODES = 25;
+
+    // -------------------------------------------------------
+    // DOM elements
+    // -------------------------------------------------------
+    const nodesSelect = document.getElementById("nodesSelect");
+    const colorSelect = document.getElementById("colorSelect");
+    const displayImage = document.getElementById("displayImage");
+
+    // -------------------------------------------------------
+    // Populate the "Number of Nodes" select
+    // -------------------------------------------------------
+    for (let n = MIN_NODES; n <= MAX_NODES; n++) {
+      const opt = document.createElement("option");
+      opt.value = n;
+      opt.textContent = n;
+      nodesSelect.appendChild(opt);
+    }
+
+    // -------------------------------------------------------
+    // Helpers
+    // -------------------------------------------------------
+    /**
+     * Returns the index of the given color in colorArray.
+     * e.g. getColorIndex("white") -> 0
+     */
+    function getColorIndex(color) {
+      return colorArray.indexOf(color);
+    }
+
+    /**
+     * Given a number of nodes n and a color c,
+     * find the corresponding NN (4..99) that matches:
+     *   floor((NN+4)/4) = n
+     *   (NN-4) mod 4 = colorIndex
+     * If it's out of range, return null.
+     */
+    function getNNFor(n, color) {
+      const ci = getColorIndex(color);
+      // The group of NN for this node count n is {4n - 4, 4n - 3, 4n - 2, 4n - 1}
+      // We'll pick the one that has (NN - 4) mod 4 = ci
+      for (let i = 0; i < 4; i++) {
+        let candidate = 4 * n - 4 + i;
+        if (candidate >= MIN_NN && candidate <= MAX_NN) {
+          // Check color index
+          if ((candidate - 4) % 4 === ci) {
+            return candidate;
+          }
+        }
+      }
+      return null; // if none found or out of range
+    }
+
+    /**
+     * Construct the filename for a given NN.
+     * The problem states files are named "00NN.jpg" for NN from 04..99,
+     * which effectively is "0004.jpg", "0005.jpg", etc.
+     * We'll just ensure it always ends up with a total of 4 digits after "00".
+     */
+    function getFilename(NN) {
+      // E.g. NN=4 => "0004.jpg", NN=15 => "0015.jpg", NN=99 => "0099.jpg"
+      // We can do this with string padStart to 2 digits after the initial "00".
+      // Then again, the user’s description suggests all are "00??.jpg" for 2-digit ??,
+      // but for single-digit 4 => "0004.jpg" is also plausible from the description.
+      // We'll do:
+      let NNstr = NN.toString().padStart(2, "0"); // e.g. "04", "15", "99"
+      return "00" + NNstr + ".jpg";               // "0004.jpg", "0015.jpg", "0099.jpg"
+    }
+
+    /**
+     * Update the <img> based on the current selection in the dropdowns.
+     */
+    function updateImage() {
+      let n = parseInt(nodesSelect.value);
+      let c = colorSelect.value;
+      let NN = getNNFor(n, c);
+
+      if (NN === null) {
+        displayImage.src = "";
+        displayImage.alt = "No valid image found.";
+      } else {
+        let filename = getFilename(NN);
+        displayImage.src = filename;
+        displayImage.alt = `Nodes: ${n}, Color: ${c}`;
+      }
+    }
+
+    // -------------------------------------------------------
+    // Event listeners for the dropdowns
+    // -------------------------------------------------------
+    nodesSelect.addEventListener("change", updateImage);
+    colorSelect.addEventListener("change", updateImage);
+
+    // -------------------------------------------------------
+    // Implement basic swipe gestures on the image to change # of nodes
+    // -------------------------------------------------------
+    let touchStartX = 0;
+    let touchEndX = 0;
+    const SWIPE_THRESHOLD = 50; // Adjust for sensitivity
+
+    displayImage.addEventListener("touchstart", function (e) {
+      touchStartX = e.changedTouches[0].screenX;
+    }, {passive: true});
+
+    displayImage.addEventListener("touchend", function (e) {
+      touchEndX = e.changedTouches[0].screenX;
+      handleSwipe();
+    }, {passive: true});
+
+    function handleSwipe() {
+      let deltaX = touchEndX - touchStartX;
+      if (Math.abs(deltaX) > SWIPE_THRESHOLD) {
+        // If deltaX < 0 => swiped left => increment nodes
+        // If deltaX > 0 => swiped right => decrement nodes
+        let currentNodes = parseInt(nodesSelect.value);
+        if (deltaX < 0) {
+          // Swipe left => next number of nodes
+          currentNodes++;
+        } else {
+          // Swipe right => previous number of nodes
+          currentNodes--;
+        }
+        // Clamp to the valid range
+        if (currentNodes < MIN_NODES) currentNodes = MIN_NODES;
+        if (currentNodes > MAX_NODES) currentNodes = MAX_NODES;
+        nodesSelect.value = currentNodes;
+        updateImage();
+      }
+    }
+
+    // -------------------------------------------------------
+    // Initialize defaults
+    // -------------------------------------------------------
+    nodesSelect.value = 2;   // starting at 2 nodes
+    colorSelect.value = "white"; // starting color
+    updateImage();
+  </script>
+</body>
+</html>
+
